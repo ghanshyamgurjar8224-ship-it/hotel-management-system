@@ -1,29 +1,59 @@
-import { BedDouble, Users, DollarSign, TrendingUp } from "lucide-react";
-import StatsCard from "./StatsCard";
-import RoomStatusCard, { Room } from "./RoomStatusCard";
-import RecentBookings, { Booking } from "./RecentBookings";
-
-const mockRooms: Room[] = [
-  { id: "1", number: "101", type: "Deluxe Suite", status: "occupied", guest: "Michael Chen", checkOut: "Jan 12" },
-  { id: "2", number: "102", type: "Standard Room", status: "available" },
-  { id: "3", number: "103", type: "Family Suite", status: "cleaning" },
-  { id: "4", number: "201", type: "Deluxe Suite", status: "occupied", guest: "Sarah Johnson", checkOut: "Jan 15" },
-  { id: "5", number: "202", type: "Standard Room", status: "maintenance" },
-  { id: "6", number: "203", type: "Premium Suite", status: "available" },
-];
-
-const mockBookings: Booking[] = [
-  { id: "1", guestName: "Emily Watson", roomNumber: "301", checkIn: "Jan 10", checkOut: "Jan 14", status: "confirmed", totalAmount: 1200 },
-  { id: "2", guestName: "James Miller", roomNumber: "105", checkIn: "Jan 11", checkOut: "Jan 13", status: "pending", totalAmount: 450 },
-  { id: "3", guestName: "Michael Chen", roomNumber: "101", checkIn: "Jan 8", checkOut: "Jan 12", status: "checked-in", totalAmount: 980 },
-  { id: "4", guestName: "Sarah Johnson", roomNumber: "201", checkIn: "Jan 10", checkOut: "Jan 15", status: "checked-in", totalAmount: 1500 },
-  { id: "5", guestName: "David Brown", roomNumber: "108", checkIn: "Jan 5", checkOut: "Jan 9", status: "checked-out", totalAmount: 720 },
-];
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { BedDouble, Users, DollarSign, TrendingUp, Loader2 } from 'lucide-react';
+import StatsCard from './StatsCard';
+import RoomStatusCard from './RoomStatusCard';
+import RecentBookings from './RecentBookings';
 
 const Dashboard = () => {
-  const availableRooms = mockRooms.filter(r => r.status === "available").length;
-  const occupiedRooms = mockRooms.filter(r => r.status === "occupied").length;
-  const occupancyRate = Math.round((occupiedRooms / mockRooms.length) * 100);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    const [roomsRes, bookingsRes] = await Promise.all([
+      supabase.from('rooms').select('*').order('room_number'),
+      supabase.from('bookings').select('*, rooms(room_number), guests(first_name, last_name)').order('created_at', { ascending: false }).limit(5),
+    ]);
+
+    if (!roomsRes.error) setRooms(roomsRes.data || []);
+    if (!bookingsRes.error) setBookings(bookingsRes.data || []);
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const availableRooms = rooms.filter(r => r.status === 'available').length;
+  const occupiedRooms = rooms.filter(r => r.status === 'occupied').length;
+  const occupancyRate = rooms.length > 0 ? Math.round((occupiedRooms / rooms.length) * 100) : 0;
+  const totalRevenue = bookings.reduce((sum, b) => sum + (b.total_amount || 0), 0);
+
+  const formattedRooms = rooms.slice(0, 5).map(r => ({
+    id: r.id,
+    number: r.room_number,
+    type: r.room_type,
+    status: r.status,
+  }));
+
+  const formattedBookings = bookings.map(b => ({
+    id: b.id,
+    guestName: b.guests ? `${b.guests.first_name} ${b.guests.last_name}` : 'Unknown',
+    roomNumber: b.rooms?.room_number || 'N/A',
+    checkIn: new Date(b.check_in).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    checkOut: new Date(b.check_out).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    status: b.status,
+    totalAmount: b.total_amount,
+  }));
 
   return (
     <div className="space-y-6">
@@ -33,42 +63,18 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard
-          title="Total Rooms"
-          value={mockRooms.length}
-          subtitle={`${availableRooms} available`}
-          icon={BedDouble}
-          variant="default"
-        />
-        <StatsCard
-          title="Occupancy Rate"
-          value={`${occupancyRate}%`}
-          icon={TrendingUp}
-          trend={{ value: 12, isPositive: true }}
-          variant="success"
-        />
-        <StatsCard
-          title="Active Guests"
-          value={occupiedRooms}
-          subtitle="Currently staying"
-          icon={Users}
-          variant="accent"
-        />
-        <StatsCard
-          title="Revenue Today"
-          value="$4,850"
-          icon={DollarSign}
-          trend={{ value: 8, isPositive: true }}
-          variant="warning"
-        />
+        <StatsCard title="Total Rooms" value={rooms.length} subtitle={`${availableRooms} available`} icon={BedDouble} variant="default" />
+        <StatsCard title="Occupancy Rate" value={`${occupancyRate}%`} icon={TrendingUp} trend={{ value: 12, isPositive: true }} variant="success" />
+        <StatsCard title="Active Guests" value={occupiedRooms} subtitle="Currently staying" icon={Users} variant="accent" />
+        <StatsCard title="Recent Revenue" value={`$${totalRevenue.toLocaleString()}`} icon={DollarSign} variant="warning" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <RecentBookings bookings={mockBookings} />
+          <RecentBookings bookings={formattedBookings} />
         </div>
         <div>
-          <RoomStatusCard rooms={mockRooms.slice(0, 5)} />
+          <RoomStatusCard rooms={formattedRooms} />
         </div>
       </div>
     </div>
