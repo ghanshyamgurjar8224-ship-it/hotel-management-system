@@ -1,40 +1,48 @@
-import { useState } from "react";
-import Sidebar from "@/components/Sidebar";
-import Dashboard from "@/components/Dashboard";
-import { BedDouble, CalendarCheck, Users, Settings } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import Sidebar from '@/components/Sidebar';
+import Dashboard from '@/components/Dashboard';
+import RoomManagement from '@/components/RoomManagement';
+import BookingForm from '@/components/BookingForm';
+import BookingCalendar from '@/components/BookingCalendar';
+import GuestDirectory from '@/components/GuestDirectory';
+import { Settings, Loader2 } from 'lucide-react';
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
 
   const renderContent = () => {
     switch (activeTab) {
-      case "dashboard":
+      case 'dashboard':
         return <Dashboard />;
-      case "rooms":
-        return (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <BedDouble className="w-16 h-16 text-muted-foreground/40 mb-4" />
-            <h3 className="text-xl font-semibold text-foreground">Room Management</h3>
-            <p className="text-muted-foreground mt-2">Manage all hotel rooms and their status</p>
-          </div>
-        );
-      case "bookings":
-        return (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <CalendarCheck className="w-16 h-16 text-muted-foreground/40 mb-4" />
-            <h3 className="text-xl font-semibold text-foreground">Booking Management</h3>
-            <p className="text-muted-foreground mt-2">View and manage all reservations</p>
-          </div>
-        );
-      case "guests":
-        return (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <Users className="w-16 h-16 text-muted-foreground/40 mb-4" />
-            <h3 className="text-xl font-semibold text-foreground">Guest Directory</h3>
-            <p className="text-muted-foreground mt-2">Access guest information and history</p>
-          </div>
-        );
-      case "settings":
+      case 'rooms':
+        return <RoomManagement />;
+      case 'bookings':
+        return <BookingForm />;
+      case 'calendar':
+        return <BookingCalendar />;
+      case 'guests':
+        return <GuestDirectory />;
+      case 'settings':
         return (
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <Settings className="w-16 h-16 text-muted-foreground/40 mb-4" />
@@ -50,7 +58,7 @@ const Index = () => {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-8 overflow-auto">
         {renderContent()}
       </main>
     </div>
